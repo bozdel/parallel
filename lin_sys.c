@@ -23,13 +23,16 @@ void init_matrix(double *part, int part_size, int matr_size, int comm_size) {
 
 
 int main(int argc, char *argv[]) {
-	int matr_size = 100;
-	if (argc >= 2) {
-		matr_size = atoi(argv[1]);
-	}
-	double precision = 0.01;
+	int Nx = 10;
+	int Ny = 5;
 	if (argc >= 3) {
-		precision = atof(argv[2]);
+		Nx = atoi(argv[1]);
+		Ny = atoi(argv[2]);
+	}
+	int matr_size = Nx * Ny;
+	double precision = 0.01;
+	if (argc >= 4) {
+		precision = atof(argv[3]);
 	}
 
 	int err_code;
@@ -43,7 +46,12 @@ int main(int argc, char *argv[]) {
 
 	for (int i = 0; i < matr_size; i++) {
 		vec_x[i] = 0;
-		vec_b[i] = matr_size + 1;
+		vec_b[i] = 0;
+	}
+	int dots_num = 6; // dots where temperature != 0
+	for (int i = 0; i < dots_num; i++) {
+		int ind = rand() % matr_size;
+		vec_b[ind] = rand() % 100 - 50;
 	}
 
 
@@ -52,6 +60,8 @@ int main(int argc, char *argv[]) {
 	int rank, comm_size;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
+	print_vec(vec_b, matr_size, comm_size, rank, NULL);
 
 	
 	// ------initing information------
@@ -77,16 +87,32 @@ int main(int argc, char *argv[]) {
 	// ------initing parts------
 	double *part = (double*)malloc(part_size * matr_size * sizeof(double));
 
-	for (int i = 0; i < part_size; i++) {
+	/*for (int i = 0; i < part_size; i++) {
 		for (int j = 0; j < matr_size; j++) {
 			part[i * matr_size + j] = 1;
 		}
 		part[i * matr_size + i + my_shift] += 1;
+	}*/
+
+	for (int i = 0; i < part_size; i++) {
+		for (int j = 0; j < matr_size; j++) {
+			part[i * matr_size + j] = 0;
+		}
+		part[i * matr_size + i + my_shift] = -4; // row (-4)
+	}
+	for (int i = -1; i < part_size; i++) {
+		if ((my_shift + 1 + i) % Nx != 0) {
+			if (0 <= my_shift + 1 + i && my_shift + 1 + i < matr_size) {
+				part[i * matr_size + my_shift + 1 + i] = 1; // upper (1) row
+			}
+			if (0 <= i + 1 && i + 1 < part_size) {
+				part[(i + 1) * matr_size + my_shift + i] = 1; // lower (1) row
+			}
+		}
 	}
 
 	
-	/*MPI_Barrier(MPI_COMM_WORLD);
-	print_matr(part, matr_size, part_size, comm_size, rank);*/
+	print_matr(part, matr_size, part_size, comm_size, rank);
 
 	// ||b||^2
 	double norm2_b = scalar_mul(vec_b, vec_b, matr_size);
@@ -158,6 +184,7 @@ int main(int argc, char *argv[]) {
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	print_vec(vec_x, matr_size, comm_size, rank, NULL);
+	print_vec(vec_y, matr_size, comm_size, rank, "y");
 
 
 	MPI_Finalize();

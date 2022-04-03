@@ -38,7 +38,7 @@ void print_vec(double *vec, int vec_size, int comm_size, int rank, char const* s
 				printf("%d: ", rank);
 			}
 			for (int i = 0; i < vec_size; i++) {
-				printf("%.0f ", vec[i]);
+				printf("%.3f ", vec[i]);
 			}
 			printf("\n");
 		}
@@ -53,6 +53,7 @@ void print_part(double *part, int matr_size, int part_size) {
 		}
 		printf("\n");
 	}
+	// printf("\n");
 }
 
 void print_matr(double *part, int matr_size, int part_size, int comm_size, int rank) {
