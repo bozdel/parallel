@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-	print_vec(vec_b, matr_size, comm_size, rank, NULL);
+	// print_vec(vec_b, matr_size, comm_size, rank, NULL);
 
 	
 	// ------initing information------
@@ -112,7 +112,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	
-	print_matr(part, matr_size, part_size, comm_size, rank);
+	// print_matr(part, matr_size, part_size, comm_size, rank);
 
 	// ||b||^2
 	double norm2_b = scalar_mul(vec_b, vec_b, matr_size);
@@ -183,8 +183,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	print_vec(vec_x, matr_size, comm_size, rank, NULL);
-	print_vec(vec_y, matr_size, comm_size, rank, "y");
+	// print_vec(vec_x, matr_size, comm_size, rank, NULL);
+	// print_vec(vec_y, matr_size, comm_size, rank, "y");
 
 
 	MPI_Finalize();
