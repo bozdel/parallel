@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <time.h>
 #include "dbg.h"
 #include "misc.h"
 
@@ -38,6 +39,7 @@ int main(int argc, char *argv[]) {
 	int err_code;
 
 	if ((err_code = MPI_Init(&argc, &argv)) != 0) {
+		printf("error\n");
 		return err_code;
 	}
 
@@ -87,6 +89,7 @@ int main(int argc, char *argv[]) {
 	// ------initing parts------
 	double *part = (double*)malloc(part_size * matr_size * sizeof(double));
 
+	// print_str("start initing parts\n", MPI_COMM_WORLD, rank);
 	/*for (int i = 0; i < part_size; i++) {
 		for (int j = 0; j < matr_size; j++) {
 			part[i * matr_size + j] = 1;
@@ -100,7 +103,35 @@ int main(int argc, char *argv[]) {
 		}
 		part[i * matr_size + i + my_shift] = -4; // row (-4)
 	}
-	for (int i = -1; i < part_size; i++) {
+	for (int i = 0; i < part_size; i++) { // upper (1) row
+		if (i * matr_size + i + 1 + my_shift < matr_size * matr_size) {
+			part[i * matr_size + i + 1 + my_shift] = 1;
+		}
+	}
+	for (int i = 0; i < part_size; i++) { // lower (1) row
+		if (i * matr_size + i - 1 + my_shift > 0) {
+			part[i * matr_size + i - 1 + my_shift] = 1;
+		}
+	}
+	for (int i = 0; i < part_size; i++) { // upper zero shifted row
+		if (i * matr_size + i + 1 + my_shift < matr_size * matr_size && (i + my_shift + 1) % 10 == 0) {
+			part[i * matr_size + i + 1 + my_shift] = 0;
+		}
+	}
+	for (int i = 0; i < part_size; i++) { // lower (1) row
+		if (i * matr_size + i - 1 + my_shift > 0 && (i + my_shift) % 10 == 0) {
+			part[i * matr_size + i - 1 + my_shift] = 0;
+		}
+	}for (int i = 0; i < part_size; i++) {
+		if (i * matr_size + i + Nx + my_shift < matr_size * matr_size) {
+			part[i * matr_size + i + Nx + my_shift] = 1;
+		}
+		if (i * matr_size + i - Nx + my_shift > 0) {
+			part[i * matr_size + i - Nx + my_shift] = 1;
+		}
+	}
+	// print_str("row -4 set\n", MPI_COMM_WORLD, rank);
+	/*for (int i = -1; i < part_size; i++) {
 		if ((my_shift + 1 + i) % Nx != 0) {
 			if (0 <= my_shift + 1 + i && my_shift + 1 + i < matr_size) {
 				part[i * matr_size + my_shift + 1 + i] = 1; // upper (1) row
@@ -109,10 +140,18 @@ int main(int argc, char *argv[]) {
 				part[(i + 1) * matr_size + my_shift + i] = 1; // lower (1) row
 			}
 		}
-	}
+	}*/
 
 	
+	// print_str("parts inited\n", MPI_COMM_WORLD, rank);
+
 	// print_matr(part, matr_size, part_size, comm_size, rank);
+
+	// MPI_Finalize();
+	// return 0;
+
+	clock_t beg = clock();
+
 
 	// ||b||^2
 	double norm2_b = scalar_mul(vec_b, vec_b, matr_size);
@@ -124,19 +163,19 @@ int main(int argc, char *argv[]) {
 	double *Ay = (double*)malloc(matr_size * sizeof(double));
 
 
-	matr_mul(part, part_size, vec_x, matr_size, my_shift, recvcounts, displs, Ax);
-	sub(Ax, vec_b, matr_size, vec_y);
+	matr_mul(part, part_size, vec_x, matr_size, my_shift, recvcounts, displs, Ax); // Ax
+	sub(Ax, vec_b, matr_size, vec_y); // y = Ax - b
 	for (cycle = 0 ; !check(vec_y, norm2_b, matr_size, precision); cycle++) {
-		matr_mul(part, part_size, vec_y, matr_size, my_shift, recvcounts, displs, Ay);
+		matr_mul(part, part_size, vec_y, matr_size, my_shift, recvcounts, displs, Ay); // Ay
 
 		double yAy = scalar_mul(vec_y, Ay, matr_size);
 		double AyAy = scalar_mul(Ay, Ay, matr_size);
 		double tou = yAy / AyAy;
 
-		subk(vec_x, tou, vec_y, matr_size, vec_x); // new x
+		subk(vec_x, tou, vec_y, matr_size, vec_x); // new x = x - ty
 
-		subk(Ax, tou, Ay, matr_size, Ax); // new Ax
-		sub(Ax, vec_b, matr_size, vec_y); // new y
+		subk(Ax, tou, Ay, matr_size, Ax); // new Ax. A(x - ty) = Ax - tAy
+		sub(Ax, vec_b, matr_size, vec_y); // new y. y = Ax - b
 	}
 
 #else
@@ -178,12 +217,16 @@ int main(int argc, char *argv[]) {
 
 #endif
 
+	clock_t end = clock();
+
+	printf("%f\n", (float)(end - beg) / CLOCKS_PER_SEC);
+
 	if (rank == 0) {
 		printf("cycles: %d\n", cycle);
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	// print_vec(vec_x, matr_size, comm_size, rank, NULL);
+	// print_vec(vec_x, matr_size, comm_size, rank, "x");
 	// print_vec(vec_y, matr_size, comm_size, rank, "y");
 
 
