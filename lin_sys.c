@@ -13,7 +13,24 @@
 
 
 
+void init_vecs_v1(double *vec_b, double *vec_x, int size) {
+	for (int i = 0; i < size; i++) {
+		vec_b[i] = size + 1;
+		vec_x[i] = 0;
+	}
+}
 
+// dots_num - dots where temperature != 0
+void init_vecs_v3(double *vec_b, double *vec_x, int size, int dots_num) {
+	for (int i = 0; i < size; i++) {
+		vec_b[i] = 0;
+		vec_x[i] = 0;
+	}
+	for (int i = 0; i < dots_num; i++) {
+		int ind = rand() % size;
+		vec_b[ind] = rand() % 100 - 50;
+	}
+}
 
 void init_matrix_v1(double *part, int part_size, int matr_size, int my_shift) {
 	for (int i = 0; i < part_size; i++) {
@@ -137,41 +154,45 @@ int main(int argc, char *argv[]) {
 	}
 
 	int err_code;
-
 	if ((err_code = MPI_Init(&argc, &argv)) != 0) {
 		printf("error\n");
 		return err_code;
 	}
 
-	double *vec_b = (double*)malloc(matr_size * sizeof(double));
-	double *vec_x = (double*)malloc(matr_size * sizeof(double));
-
-	for (int i = 0; i < matr_size; i++) {
-		vec_x[i] = 0;
-		vec_b[i] = 0;
-	}
-	// 1-st variant
-	/*for (int i = 0; i < matr_size; i++) {
-		vec_b[i] = matr_size + 1;
-		vec_x[i] = 0;
-	}*/
-	// 3-rd variant
-	int dots_num = 6; // dots where temperature != 0
-	for (int i = 0; i < dots_num; i++) {
-		int ind = rand() % matr_size;
-		vec_b[ind] = rand() % 100 - 50;
-	}
-
-
-
-
 	int rank, comm_size;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
 
-	// print_vec(vec_b, matr_size, comm_size, rank, NULL);
+	
+	MPI_Comm ring_comm;
+	int periods[1] = {true};
+	int dims[1] = {comm_size};
+
+	MPI_Cart_create(MPI_COMM_WORLD, 1, dims, periods, false, &ring_comm);
+
+	enum derictions {LEFT, RIGHT};
+	int neighbours_ranks[2] = {0, 0};
+	MPI_Cart_shift(ring_comm, 0, 1, &neighbours_ranks[LEFT], &neighbours_ranks[RIGHT]);
+
+	for (int i = 0; i < comm_size; i++) {
+		if (rank == i) {
+			printf("(left, i, right): (%d, %d, %d)\n", neighbours_ranks[LEFT], rank, neighbours_ranks[RIGHT]);
+		}
+		MPI_Barrier(MPI_COMM_WORLD);
+	}
 
 	
+
+/*
+	// --------initing vecs----------
+
+	double *vec_b = (double*)malloc(matr_size * sizeof(double));
+	double *vec_x = (double*)malloc(matr_size * sizeof(double));
+
+	int dots_num = 6;
+	init_vecs_v3(vec_b, vec_x, matr_size, dots_num);
+
+
 	// ------initing information------
 
 	int part_size = part_size_by_rank(matr_size, comm_size, rank);
@@ -195,14 +216,7 @@ int main(int argc, char *argv[]) {
 	// ------initing parts------
 	double *part = (double*)malloc(part_size * matr_size * sizeof(double));
 
-	// 1-st variant
-	
-	// init_matrix_v1(part, part_size, matr_size, my_shift);
-
-	// 3-rd variant
-
 	init_matrix_v3(part, part_size, matr_size, my_shift, Nx, Ny);
-
 
 	// print_matr(part, matr_size, part_size, comm_size, rank);
 
@@ -225,67 +239,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	// MPI_Barrier(MPI_COMM_WORLD);
-	// print_vec(vec_x, matr_size, comm_size, rank, "x");
+	// print_vec(vec_x, matr_size, comm_size, rank, "x");*/
 
 	MPI_Finalize();
 	return 0;
 }
-
-#if 0
-#include <stdio.h>
-#include <stdlib.h>
-#include <mpi.h>
- 
-/**
- * @brief Illustrates how to use an allgather.
- * @details This application is meant to be run with 3 MPI processes. Every MPI
- * process begins with a value, then every MPI process collects the entirety of
- * the data gathered and prints them. It can be visualised as follows:
- *
- * +-----------+  +-----------+  +-----------+
- * | Process 0 |  | Process 1 |  | Process 2 |
- * +-+-------+-+  +-+-------+-+  +-+-------+-+
- *   | Value |      | Value |      | Value |
- *   |   0   |      |  100  |      |  200  |
- *   +-------+      +-------+      +-------+
- *       |________      |      ________|
- *                |     |     | 
- *             +-----+-----+-----+
- *             |  0  | 100 | 200 |
- *             +-----+-----+-----+
- *             |   Each process  |
- *             +-----------------+
- **/
-int main(int argc, char* argv[])
-{
-    MPI_Init(&argc, &argv);
- 
-    // Get number of processes and check that 3 processes are used
-    int size;
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    if(size != 3)
-    {
-        printf("This application is meant to be run with 3 MPI processes.\n");
-        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-    }
- 
-    // Get my rank
-    int my_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
- 
-    // Define my value
-    // int my_value = my_rank * 100;
-    // printf("Process %d, my value = %d.\n", my_rank, my_value);
-    int my_arr[3] = { 0 };
-    my_arr[my_rank] = my_rank;
-    printf("Process %d: %d %d %d\n", my_rank, my_arr[0], my_arr[1], my_arr[2]);
- 
-    int buffer[3];
-    MPI_Allgather(my_arr + my_rank, 1, MPI_INT, my_arr, 1, MPI_INT, MPI_COMM_WORLD);
-    printf("Values collected on process %d: %d, %d, %d.\n", my_rank, buffer[0], buffer[1], buffer[2]);
- 
-    MPI_Finalize();
- 
-    return EXIT_SUCCESS;
-}
-#endif
