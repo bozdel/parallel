@@ -15,13 +15,113 @@
 
 
 
-void init_matrix(double *part, int part_size, int matr_size, int comm_size) {
-	return;
+void init_matrix_v1(double *part, int part_size, int matr_size, int my_shift) {
+	for (int i = 0; i < part_size; i++) {
+		for (int j = 0; j < matr_size; j++) {
+			part[i * matr_size + j] = 1;
+		}
+		part[i * matr_size + i + my_shift] += 1;
+	}
+}
+
+void init_matrix_v3(double *part, int part_size, int matr_size, int my_shift, int Nx, int Ny) {
+	for (int i = 0; i < part_size; i++) {
+		for (int j = 0; j < matr_size; j++) {
+			part[i * matr_size + j] = 0;
+		}
+		part[i * matr_size + i + my_shift] = -4; // row (-4)
+	}
+	for (int i = 0; i < part_size; i++) { // upper (1) row
+		if (i * matr_size + i + 1 + my_shift < matr_size * matr_size) {
+			part[i * matr_size + i + 1 + my_shift] = 1;
+		}
+	}
+	for (int i = 0; i < part_size; i++) { // lower (1) row
+		if (i * matr_size + i - 1 + my_shift > 0) {
+			part[i * matr_size + i - 1 + my_shift] = 1;
+		}
+	}
+	for (int i = 0; i < part_size; i++) { // upper zero shifted row
+		if (i * matr_size + i + 1 + my_shift < matr_size * matr_size && (i + my_shift + 1) % Nx == 0) {
+			part[i * matr_size + i + 1 + my_shift] = 0;
+		}
+	}
+	for (int i = 0; i < part_size; i++) { // lower (1) row
+		if (i * matr_size + i - 1 + my_shift > 0 && (i + my_shift) % Nx == 0) {
+			part[i * matr_size + i - 1 + my_shift] = 0;
+		}
+	}
+	for (int i = 0; i < part_size; i++) {
+		if (i * matr_size + i + Nx + my_shift < matr_size * matr_size && (i + Nx + my_shift) < matr_size) {
+			part[i * matr_size + i + Nx + my_shift] = 1;
+		}
+		if (i * matr_size + i - Nx + my_shift >= 0 && (i - Nx + my_shift) >= 0) {
+			part[i * matr_size + i - Nx + my_shift] = 1;
+		}
+	}
 }
 
 
+// returns cycles amont
+// vec_x - destination vector
+int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *displs, int *recvcounts, int rank) {
+	int cycle = 0;
+
+	double norm2_b = scalar_mul(vec_b, vec_b, size);
+
+	// something wrong with allocation ( -np 4 ./prog 3 7)
+	double *Ax = (double*)malloc(size * sizeof(double));
+	double *vec_y = (double*)malloc(size * sizeof(double));
+	double *Ay = (double*)malloc(size * sizeof(double));
 
 
+	matr_mul(part, part_size, vec_x, size, recvcounts, displs, Ax); // Ax
+	sub(Ax, vec_b, size, vec_y); // y = Ax - b
+	for (cycle = 0 ; !check(vec_y, norm2_b, size, precision); cycle++) { // check - (||Ax-b||/||b||)^2 < precision^2
+		matr_mul(part, part_size, vec_y, size, recvcounts, displs, Ay); // Ay
+
+		double yAy = scalar_mul(vec_y, Ay, size);
+		double AyAy = scalar_mul(Ay, Ay, size);
+		double tou = yAy / AyAy;
+
+		subk(vec_x, tou, vec_y, size, vec_x); // new x = x - ty
+
+		subk(Ax, tou, Ay, size, Ax); // new Ax. A(x - ty) = Ax - tAy
+		sub(Ax, vec_b, size, vec_y); // new y. y = Ax - b
+	}
+
+	return cycle;
+}
+
+// same signature as solve_fast
+int solve(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *displs, int *recvcounts, int rank) {
+	int cycle = 0;
+
+	double norm2_b = scalar_mul(vec_b, vec_b, size);
+
+	double *vec_y = (double*)malloc(size * sizeof(double));
+	double *Ay = (double*)malloc(size * sizeof(double));
+
+	matr_mul(part, part_size, vec_x, size, recvcounts, displs, vec_y);
+
+	sub(vec_y, vec_b, size, vec_y);
+
+	for (cycle = 0 ; !check(vec_y, norm2_b, size, precision); cycle++) {
+		matr_mul(part, part_size, vec_y, size, recvcounts, displs, Ay);
+
+		double yAy = scalar_mul(vec_y, Ay, size);
+		double AyAy = scalar_mul(Ay, Ay, size);
+		double tou = yAy / AyAy;
+
+		subk(vec_x, tou, vec_y, size, vec_x); // new x
+
+		matr_mul(part, part_size, vec_x, size, recvcounts, displs, vec_y);
+
+		sub(vec_y, vec_b, size, vec_y); // new y
+	}
+
+	return cycle;
+}
 
 int main(int argc, char *argv[]) {
 	int Nx = 10;
@@ -50,6 +150,12 @@ int main(int argc, char *argv[]) {
 		vec_x[i] = 0;
 		vec_b[i] = 0;
 	}
+	// 1-st variant
+	/*for (int i = 0; i < matr_size; i++) {
+		vec_b[i] = matr_size + 1;
+		vec_x[i] = 0;
+	}*/
+	// 3-rd variant
 	int dots_num = 6; // dots where temperature != 0
 	for (int i = 0; i < dots_num; i++) {
 		int ind = rand() % matr_size;
@@ -67,10 +173,10 @@ int main(int argc, char *argv[]) {
 
 	
 	// ------initing information------
-	int cycle; // for checking cycles amount
 
 	int part_size = part_size_by_rank(matr_size, comm_size, rank);
 
+	// can be raplaces by displs[rank_number]
 	// index of the first line of part in full matrix
 	int my_shift = shift_by_rank(matr_size, comm_size, rank);
 	
@@ -89,146 +195,37 @@ int main(int argc, char *argv[]) {
 	// ------initing parts------
 	double *part = (double*)malloc(part_size * matr_size * sizeof(double));
 
-	// print_str("start initing parts\n", MPI_COMM_WORLD, rank);
-	/*for (int i = 0; i < part_size; i++) {
-		for (int j = 0; j < matr_size; j++) {
-			part[i * matr_size + j] = 1;
-		}
-		part[i * matr_size + i + my_shift] += 1;
-	}*/
-
-	for (int i = 0; i < part_size; i++) {
-		for (int j = 0; j < matr_size; j++) {
-			part[i * matr_size + j] = 0;
-		}
-		part[i * matr_size + i + my_shift] = -4; // row (-4)
-	}
-	for (int i = 0; i < part_size; i++) { // upper (1) row
-		if (i * matr_size + i + 1 + my_shift < matr_size * matr_size) {
-			part[i * matr_size + i + 1 + my_shift] = 1;
-		}
-	}
-	for (int i = 0; i < part_size; i++) { // lower (1) row
-		if (i * matr_size + i - 1 + my_shift > 0) {
-			part[i * matr_size + i - 1 + my_shift] = 1;
-		}
-	}
-	for (int i = 0; i < part_size; i++) { // upper zero shifted row
-		if (i * matr_size + i + 1 + my_shift < matr_size * matr_size && (i + my_shift + 1) % 10 == 0) {
-			part[i * matr_size + i + 1 + my_shift] = 0;
-		}
-	}
-	for (int i = 0; i < part_size; i++) { // lower (1) row
-		if (i * matr_size + i - 1 + my_shift > 0 && (i + my_shift) % 10 == 0) {
-			part[i * matr_size + i - 1 + my_shift] = 0;
-		}
-	}for (int i = 0; i < part_size; i++) {
-		if (i * matr_size + i + Nx + my_shift < matr_size * matr_size) {
-			part[i * matr_size + i + Nx + my_shift] = 1;
-		}
-		if (i * matr_size + i - Nx + my_shift > 0) {
-			part[i * matr_size + i - Nx + my_shift] = 1;
-		}
-	}
-	// print_str("row -4 set\n", MPI_COMM_WORLD, rank);
-	/*for (int i = -1; i < part_size; i++) {
-		if ((my_shift + 1 + i) % Nx != 0) {
-			if (0 <= my_shift + 1 + i && my_shift + 1 + i < matr_size) {
-				part[i * matr_size + my_shift + 1 + i] = 1; // upper (1) row
-			}
-			if (0 <= i + 1 && i + 1 < part_size) {
-				part[(i + 1) * matr_size + my_shift + i] = 1; // lower (1) row
-			}
-		}
-	}*/
-
+	// 1-st variant
 	
-	// print_str("parts inited\n", MPI_COMM_WORLD, rank);
+	// init_matrix_v1(part, part_size, matr_size, my_shift);
+
+	// 3-rd variant
+
+	init_matrix_v3(part, part_size, matr_size, my_shift, Nx, Ny);
+
 
 	// print_matr(part, matr_size, part_size, comm_size, rank);
 
-	// MPI_Finalize();
-	// return 0;
+
+	int cycle = 0; // for checking cycles amount
 
 	clock_t beg = clock();
 
-
-	// ||b||^2
-	double norm2_b = scalar_mul(vec_b, vec_b, matr_size);
-
-
 #ifdef FAST
-	double *Ax = (double*)malloc(matr_size * sizeof(double));
-	double *vec_y = (double*)malloc(matr_size * sizeof(double));
-	double *Ay = (double*)malloc(matr_size * sizeof(double));
-
-
-	matr_mul(part, part_size, vec_x, matr_size, my_shift, recvcounts, displs, Ax); // Ax
-	sub(Ax, vec_b, matr_size, vec_y); // y = Ax - b
-	for (cycle = 0 ; !check(vec_y, norm2_b, matr_size, precision); cycle++) {
-		matr_mul(part, part_size, vec_y, matr_size, my_shift, recvcounts, displs, Ay); // Ay
-
-		double yAy = scalar_mul(vec_y, Ay, matr_size);
-		double AyAy = scalar_mul(Ay, Ay, matr_size);
-		double tou = yAy / AyAy;
-
-		subk(vec_x, tou, vec_y, matr_size, vec_x); // new x = x - ty
-
-		subk(Ax, tou, Ay, matr_size, Ax); // new Ax. A(x - ty) = Ax - tAy
-		sub(Ax, vec_b, matr_size, vec_y); // new y. y = Ax - b
-	}
-
+	cycle = solve_fast(part, part_size, vec_b, vec_x, matr_size, precision, displs, recvcounts, rank);
 #else
-	double *vec_y = (double*)malloc(matr_size * sizeof(double));
-	double *Ay = (double*)malloc(matr_size * sizeof(double));
-
-	print_vec(vec_b, matr_size, comm_size, rank, "b");
-	print_vec(vec_x, matr_size, comm_size, rank, "x");
-
-	matr_mul(part, part_size, vec_x, matr_size, my_shift, recvcounts, displs, vec_y);
-
-	print_vec(vec_y, matr_size, comm_size, rank, "Ax");	
-
-	sub(vec_y, vec_b, matr_size, vec_y);
-
-	print_vec(vec_y, matr_size, comm_size, rank, "Ax - b (y)");
-
-	printf("%d prec: %d\n", rank, check(vec_y, norm2_b, matr_size, precision));
-	MPI_Barrier(MPI_COMM_WORLD);
-	for (cycle = 0 ; !check(vec_y, norm2_b, matr_size, precision); cycle++) {
-		matr_mul(part, part_size, vec_y, matr_size, my_shift, recvcounts, displs, Ay);
-
-		print_vec(Ay, matr_size, comm_size, rank, "Ay");
-
-		sleep(1);
-
-		double yAy = scalar_mul(vec_y, Ay, matr_size);
-		double AyAy = scalar_mul(Ay, Ay, matr_size);
-		double tou = yAy / AyAy;
-
-		subk(vec_x, tou, vec_y, matr_size, vec_x); // new x
-		print_vec(vec_x, matr_size, comm_size, rank, "x");
-
-		matr_mul(part, part_size, vec_x, matr_size, my_shift, recvcounts, displs, vec_y);
-		print_vec(vec_y, matr_size, comm_size, rank, "Ax");
-		sub(vec_y, vec_b, matr_size, vec_y); // new y
-		print_vec(vec_y, matr_size, comm_size, rank, "Ax - b");
-	}
-
+	cycle = solve(part, part_size, vec_b, vec_x, matr_size, precision, displs, recvcounts, rank);
 #endif
 
 	clock_t end = clock();
 
 	printf("%f\n", (float)(end - beg) / CLOCKS_PER_SEC);
-
 	if (rank == 0) {
 		printf("cycles: %d\n", cycle);
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
+	// MPI_Barrier(MPI_COMM_WORLD);
 	// print_vec(vec_x, matr_size, comm_size, rank, "x");
-	// print_vec(vec_y, matr_size, comm_size, rank, "y");
-
 
 	MPI_Finalize();
 	return 0;

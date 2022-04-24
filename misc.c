@@ -3,27 +3,26 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-// shift - is way to determine where to put result of mul into dest (which part of matrix was multiplied)
-void part_matr_mul(double *part_matr, int part_size, double *vec, int size, double *dest, int shift) {
+
+void part_matr_mul(double *part_matr, int part_size, double *vec, int size, double *dest) {
 	for (int i = 0; i < part_size; i++) {
 		double *line = part_matr + i * size;
 		double tmp_res = 0.0;
 		for (int j = 0; j < size; j++) {
 			tmp_res += line[j] * vec[j];
 		}
-		dest[shift + i] = tmp_res;
+		dest[i] = tmp_res;
 	}
 }
 
 // size - size of matrix and vector (they should be same)
-void matr_mul(double *part_matr, int part_size, double *vec, int size, int shift, int *recvcounts, int *displs, double *dst_vec/*, int rank, int comm_size*/) {
-	double *tmp = (double*)malloc(size * sizeof(double));
-	part_matr_mul(part_matr, part_size, vec, size, tmp, shift);
-	// print_vec(tmp, size, comm_size, rank);
+void matr_mul(double *part_matr, int part_size, double *vec, int size, int *recvcounts, int *displs, double *dst_vec/*, int rank, int comm_size*/) {
+	double *tmp = (double*)malloc(part_size * sizeof(double));
+	part_matr_mul(part_matr, part_size, vec, size, tmp);
+	// print_vec(tmp, part_size, comm_size, rank);
 
 
-	// double *tmp2 = (double*)malloc(matr_size * sizeof(double));
-	MPI_Allgatherv(tmp + shift, part_size, MPI_DOUBLE, dst_vec, recvcounts, displs, MPI_DOUBLE, MPI_COMM_WORLD);
+	MPI_Allgatherv(tmp, part_size, MPI_DOUBLE, dst_vec, recvcounts, displs, MPI_DOUBLE, MPI_COMM_WORLD);
 	free(tmp); // ??? or I can pass it(tmp) in arguments
 }
 
@@ -80,6 +79,7 @@ int shift_by_rank(int matr_size, int comm_size, int rank) {
 	}
 }
 
+// squaring is correct because norm always > 0 and precision < 0 is meanless (so it > 0 too)
 bool check(double *vec, double norm2_b, int size, double precision) {
 	double norm2_v = scalar_mul(vec, vec, size);
 	return norm2_v / norm2_b < (precision * precision);
