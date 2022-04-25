@@ -73,12 +73,13 @@ int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int si
 	double *Ax = (double*)malloc(size * sizeof(double));
 	double *vec_y = (double*)malloc(size * sizeof(double));
 	double *Ay = (double*)malloc(size * sizeof(double));
+	// temporary vector for matr_mul func
+	double *mm_tmp = (double*)malloc(part_size * sizeof(double));
 
-
-	matr_mul(part, part_size, vec_x, size, recvcounts, displs, Ax); // Ax
+	matr_mul(part, part_size, vec_x, size, recvcounts, displs, Ax, mm_tmp); // Ax
 	sub(Ax, vec_b, size, vec_y); // y = Ax - b
 	for (cycle = 0 ; !check(vec_y, norm2_b, size, precision); cycle++) { // check - (||Ax-b||/||b||)^2 < precision^2
-		matr_mul(part, part_size, vec_y, size, recvcounts, displs, Ay); // Ay
+		matr_mul(part, part_size, vec_y, size, recvcounts, displs, Ay, mm_tmp); // Ay
 
 		double yAy = scalar_mul(vec_y, Ay, size);
 		double AyAy = scalar_mul(Ay, Ay, size);
@@ -101,13 +102,15 @@ int solve(double *part, int part_size, double *vec_b, double *vec_x, int size, d
 
 	double *vec_y = (double*)malloc(size * sizeof(double));
 	double *Ay = (double*)malloc(size * sizeof(double));
+	// temporary vector for matr_mul func
+	double *mm_tmp = (double*)malloc(part_size * sizeof(double));
 
-	matr_mul(part, part_size, vec_x, size, recvcounts, displs, vec_y);
+	matr_mul(part, part_size, vec_x, size, recvcounts, displs, vec_y, mm_tmp);
 
 	sub(vec_y, vec_b, size, vec_y);
 
 	for (cycle = 0 ; !check(vec_y, norm2_b, size, precision); cycle++) {
-		matr_mul(part, part_size, vec_y, size, recvcounts, displs, Ay);
+		matr_mul(part, part_size, vec_y, size, recvcounts, displs, Ay, mm_tmp);
 
 		double yAy = scalar_mul(vec_y, Ay, size);
 		double AyAy = scalar_mul(Ay, Ay, size);
@@ -115,7 +118,7 @@ int solve(double *part, int part_size, double *vec_b, double *vec_x, int size, d
 
 		subk(vec_x, tou, vec_y, size, vec_x); // new x
 
-		matr_mul(part, part_size, vec_x, size, recvcounts, displs, vec_y);
+		matr_mul(part, part_size, vec_x, size, recvcounts, displs, vec_y, mm_tmp);
 
 		sub(vec_y, vec_b, size, vec_y); // new y
 	}

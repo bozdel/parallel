@@ -6,7 +6,7 @@
 void part_matr_mul(double *part_matr, int part_size, double *vec, int size, double *dest);
 
 // size - size of matrix and vector (they should be same)
-void matr_mul(double *part_matr, int part_size, double *vec, int size, int *recvcounts, int *displs, double *dst_vec/*, int rank, int comm_size*/);
+void matr_mul(double *part_matr, int part_size, double *vec, int size, int *recvcounts, int *displs, double *dst_vec, double *tmp/*, int rank, int comm_size*/);
 
 void sub(double *vec1, double *vec2, int size, double *dst_vec);
 

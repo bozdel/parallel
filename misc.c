@@ -16,14 +16,12 @@ void part_matr_mul(double *part_matr, int part_size, double *vec, int size, doub
 }
 
 // size - size of matrix and vector (they should be same)
-void matr_mul(double *part_matr, int part_size, double *vec, int size, int *recvcounts, int *displs, double *dst_vec/*, int rank, int comm_size*/) {
-	double *tmp = (double*)malloc(part_size * sizeof(double));
+void matr_mul(double *part_matr, int part_size, double *vec, int size, int *recvcounts, int *displs, double *dst_vec, double *tmp/*, int rank, int comm_size*/) {
 	part_matr_mul(part_matr, part_size, vec, size, tmp);
 	// print_vec(tmp, part_size, comm_size, rank);
 
 
 	MPI_Allgatherv(tmp, part_size, MPI_DOUBLE, dst_vec, recvcounts, displs, MPI_DOUBLE, MPI_COMM_WORLD);
-	free(tmp); // ??? or I can pass it(tmp) in arguments
 }
 
 void sub(double *vec1, double *vec2, int size, double *dst_vec) {
