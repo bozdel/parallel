@@ -45,7 +45,7 @@ void subk(double *vec1, double k, double *vec2, int size, double *dst) {
 }
 
 // something near scalmul_allred(vec1, vec2 + my_shift, part_size)
-double scalar_mul_allred(double *vec1, double *vec2, int size) {
+double scalar_mul_distr(double *vec1, double *vec2, int size) {
 	double sub_res = 0;
 	for (int i = 0; i < size; i++) {
 		sub_res += vec1[i] * vec2[i];

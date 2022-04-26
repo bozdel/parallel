@@ -15,7 +15,7 @@ void kvec(double *vec, double k, int size, double *dst);
 void subk(double *vec1, double k, double *vec2, int size, double *dst);
 
 // something near scalmul_allred(vec1, vec2 + my_shift, part_size)
-double scalar_mul_allred(double *vec1, double *vec2, int size);
+double scalar_mul_distr(double *vec1, double *vec2, int size);
 
 double scalar_mul(double *vec1, double *vec2, int size);
 
