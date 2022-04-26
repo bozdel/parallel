@@ -5,18 +5,22 @@
 #include <stdbool.h>
 #include <time.h>
 #include "dbg.h"
-#include "misc.h"
-// #include "misc2.h"
 
+#define distr
+
+#ifndef distr
+#include "misc.h"
+#else
+#include "misc2.h"
+#endif
 
 #define FAST
 
 
 
-
-void init_vecs_v1(double *vec_b, double *vec_x, int size, int shift) {
+void init_vecs_v1(double *vec_b, double *vec_x, int size, int full_size) {
 	for (int i = 0; i < size; i++) {
-		vec_b[i] = i + 1 + shift;
+		vec_b[i] = full_size + 1;
 		vec_x[i] = 0;
 	}
 }
@@ -80,6 +84,7 @@ void init_matrix_v3(double *part, int part_size, int matr_size, int my_shift, in
 }
 
 
+#ifndef distr
 // returns cycles amont
 // vec_x - destination vector
 int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *displs, int *recvcounts, int rank) {
@@ -91,28 +96,38 @@ int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int si
 	double *Ax = (double*)malloc(size * sizeof(double));
 	double *vec_y = (double*)malloc(size * sizeof(double));
 	double *Ay = (double*)malloc(size * sizeof(double));
+	int comm_size = -1;
+	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+	print_vec(vec_b, size, comm_size, rank, NULL);
+	print_vec(vec_x, size, comm_size, rank, NULL);
 
 
 	matr_mul(part, part_size, vec_x, size, recvcounts, displs, Ax); // Ax
+	print_vec(Ax, size, comm_size, rank, NULL);
 	sub(Ax, vec_b, size, vec_y); // y = Ax - b
+	print_vec(vec_y, size, comm_size, rank, NULL);
 	for (cycle = 0 ; !check(vec_y, norm2_b, size, precision); cycle++) { // check - (||Ax-b||/||b||)^2 < precision^2
 		matr_mul(part, part_size, vec_y, size, recvcounts, displs, Ay); // Ay
+		print_vec(Ay, size, comm_size, rank, NULL);
 
 		double yAy = scalar_mul(vec_y, Ay, size);
 		double AyAy = scalar_mul(Ay, Ay, size);
 		double tou = yAy / AyAy;
 
-		// printf("tou: %f\n", tou);
-		// sleep(1);
+		printf("tou: %f\n", tou);
+		sleep(1);
 
 		subk(vec_x, tou, vec_y, size, vec_x); // new x = x - ty
 
 		subk(Ax, tou, Ay, size, Ax); // new Ax. A(x - ty) = Ax - tAy
 		sub(Ax, vec_b, size, vec_y); // new y. y = Ax - b
+		double norm2_v = scalar_mul(vec_y, vec_y, size);
+		printf("norm2_v: %f\n", norm2_v);
 	}
 
 	return cycle;
 }
+#else
 
 /*// same signature as solve_fast
 int solve(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *displs, int *recvcounts, int rank) {
@@ -145,7 +160,7 @@ int solve(double *part, int part_size, double *vec_b, double *vec_x, int size, d
 }*/
 
 
-/*int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *shifts, MPI_Comm ring, int rank, int comm_size, int *neighbours) {
+int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *shifts, MPI_Comm ring, int rank, int comm_size, int *neighbours) {
 	int cycle = 0;
 
 	double norm2_b = scalar_mul_distr(vec_b, vec_b, size);
@@ -163,24 +178,31 @@ int solve(double *part, int part_size, double *vec_b, double *vec_x, int size, d
 	sub(Ax, vec_b, part_size, vec_y); // y = Ax - b
 	print_distr_vec(vec_y, part_size, comm_size, rank);
 	for (cycle = 0 ; !check_distr(vec_y, norm2_b, part_size, precision); cycle++) { // check - (||Ax-b||/||b||)^2 < precision^2
+		print_matr(part, size, part_size, comm_size, rank);
 		matr_mul(part, vec_y, Ay, part_size, size, shifts[rank], ring, comm_size, neighbours); // Ay
-		printf("aloha\n");
-		double yAy = scalar_mul_distr(vec_y, Ay, size);
-		double AyAy = scalar_mul_distr(Ay, Ay, size);
+		print_distr_vec(Ay, part_size, comm_size, rank);
+		double yAy = scalar_mul_distr(vec_y, Ay, part_size);
+		// printf("yAy: %f\n", yAy);
+		double AyAy = scalar_mul_distr(Ay, Ay, part_size);
+		// printf("AyAy: %f\n", AyAy);
 		double tou = yAy / AyAy;
-		printf("tou: %f\n", tou);
+		// printf("tou: %f\n", tou);
 
-		sleep(1);
+		// sleep(1);
 
 		subk(vec_x, tou, vec_y, part_size, vec_x); // new x = x - ty
 
 		subk(Ax, tou, Ay, part_size, Ax); // new Ax. A(x - ty) = Ax - tAy
 		sub(Ax, vec_b, part_size, vec_y); // new y. y = Ax - b
+		double norm2_v = scalar_mul_distr(vec_y, vec_y, part_size);
+		// printf("norm2_v: %f\n", norm2_v);
 	}
 
 	return cycle;
 }
-*/
+#endif
+
+#ifndef distr
 int main(int argc, char *argv[]) {
 	int Nx = 10;
 	int Ny = 5;
@@ -204,7 +226,18 @@ int main(int argc, char *argv[]) {
 	double *vec_b = (double*)malloc(matr_size * sizeof(double));
 	double *vec_x = (double*)malloc(matr_size * sizeof(double));
 
-	
+	for (int i = 0; i < matr_size; i++) {
+		vec_x[i] = 0;
+		vec_b[i] = 0;
+	}
+	// 1-st variant
+	init_vecs_v1(vec_b, vec_x, matr_size, matr_size);
+	// 3-rd variant
+	int dots_num = 6; // dots where temperature != 0
+	/*for (int i = 0; i < dots_num; i++) {
+		int ind = rand() % matr_size;
+		vec_b[ind] = rand() % 100 - 50;
+	}*/
 
 
 
@@ -239,16 +272,27 @@ int main(int argc, char *argv[]) {
 	// ------initing parts------
 	double *part = (double*)malloc(part_size * matr_size * sizeof(double));
 
+	// 1-st variant
 	
 	init_matrix_v1(part, part_size, matr_size, my_shift);
-	init_vecs_v1(vec_b, vec_x, matr_size, my_shift);
+
+	// 3-rd variant
+
+	// init_matrix_v3(part, part_size, matr_size, my_shift, Nx, Ny);
+
+
+	// print_matr(part, matr_size, part_size, comm_size, rank);
 
 
 	int cycle = 0; // for checking cycles amount
 
 	clock_t beg = clock();
 
+#ifdef FAST
 	cycle = solve_fast(part, part_size, vec_b, vec_x, matr_size, precision, displs, recvcounts, rank);
+#else
+	cycle = solve(part, part_size, vec_b, vec_x, matr_size, precision, displs, recvcounts, rank);
+#endif
 
 	clock_t end = clock();
 
@@ -257,11 +301,14 @@ int main(int argc, char *argv[]) {
 		printf("cycles: %d\n", cycle);
 	}
 
+	// MPI_Barrier(MPI_COMM_WORLD);
+	// print_vec(vec_x, matr_size, comm_size, rank, "x");
+
 	MPI_Finalize();
 	return 0;
 }
-#if 0
-int main2(int argc, char *argv[]) {
+#else
+int main(int argc, char *argv[]) {
 	int Nx = 10;
 	int Ny = 5;
 	if (argc >= 3) {
@@ -313,15 +360,27 @@ int main2(int argc, char *argv[]) {
 		sizes[proc_rank] = part_size_by_rank(matr_size, comm_size, proc_rank);
 	}
 
-	double *part = (double*)malloc(part_size * matr_size * sizeof(double));
+	/*double *part = (double*)malloc(part_size * matr_size * sizeof(double));
 	init_matrix_v1(part, part_size, matr_size, shift);
 	double *vec_b = (double*)malloc(part_size * sizeof(double));
 	double *vec_x = (double*)malloc(part_size * sizeof(double));
-	init_vecs_v1(vec_b, vec_x, part_size, shift);
+	init_vecs_v1(vec_b, vec_x, part_size, matr_size);*/
+	double *part = (double*)malloc(part_size * matr_size * sizeof(double));
+	// init_matrix_v3(part, part_size, matr_size, shift, Nx, Ny);
+	double *vec_bt = (double*)malloc(matr_size * sizeof(double));
+	double *vec_xt = (double*)malloc(matr_size * sizeof(double));
+	int dots_num = 6;
+	init_vecs_v3(vec_bt, vec_xt, matr_size, dots_num);
+	double *vec_b = (double*)malloc(part_size * sizeof(double));
+	double *vec_x = (double*)malloc(part_size * sizeof(double));
+	for (int i = 0; i < comm_size; i++) {
+		if (i == rank) {
+			vec_b[i] = vec_bt[i + shifts[rank]];
+			vec_x[i] = vec_xt[i + shifts[rank]];
+		}
+	}
+	print_distr_vec(vec_x, part_size, comm_size, rank);
 
-	MPI_Barrier(MPI_COMM_WORLD);
-	print_distr_vec(vec_b, part_size, comm_size, rank);
-	MPI_Barrier(MPI_COMM_WORLD);
 
 	/*double *recv_buff = (double*)malloc(sizes[0] * sizeof(double));
 	double *send_buff = (double*)malloc(sizes[0] * sizeof(double));
@@ -348,10 +407,26 @@ int main2(int argc, char *argv[]) {
 	double smul = scalar_mul_distr(vec_b, dst, part_size);
 	printf("smul: %.3f\n", smul);*/
 
-	int cycle = solve_fast(part, part_size, vec_b, vec_x, matr_size, precision, shifts, ring_comm, rank, comm_size, neighbours_ranks);
-	if (rank == 0) printf("cycles: %d\n", cycle);
+	//--------------------
 
-	print_distr_vec(vec_x, part_size, comm_size, rank);
+	/*int cycle = solve_fast(part, part_size, vec_b, vec_x, matr_size, precision, shifts, ring_comm, rank, comm_size, neighbours_ranks);
+	if (rank == 0) printf("cycles: %d\n", cycle);
+	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(ring_comm);
+	printf("tlps\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(ring_comm);
+	print_distr_vec(vec_x, part_size, comm_size, rank);*/
+
+
+	/*double *foo = (double*)malloc(part_size * sizeof(double));
+	for (int i = 0; i < part_size; i++) {
+		foo[i] = -10;
+	}
+	print_vecint(shifts, comm_size, comm_size, rank);
+	double *dst = (double*)malloc(part_size * sizeof(double));
+	matr_mul(part, foo, dst, part_size, matr_size, shifts[rank], ring_comm, comm_size, neighbours_ranks); // Ay
+	print_distr_vec(dst, part_size, comm_size, rank);*/
 
 /*
 	// --------initing vecs----------

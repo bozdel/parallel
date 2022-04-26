@@ -7,13 +7,15 @@
 
 #include "dbg.h"
 
-void sub_matr_mul(double *part_matr, double *part_vec, double *dst, int m_size, int v_size, int whence) {
+void sub_matr_mul(double *part_matr, double *part_vec, double *dst, int m_size, int v_size, int full_size, int whence, int rank) {
 	for (int i = 0; i < m_size; i++) {
-		double *line = part_matr + i * m_size + whence;
+		double *line = part_matr + i * full_size + whence;
 		double tmp = 0.0;
 		for (int j = 0; j < v_size; j++) {
+			if (rank == 0) printf("%f, ", line[j]);
 			tmp += line[j] * part_vec[j];
 		}
+		if (rank == 0) printf("\n");
 		dst[i] += tmp;
 	}
 }
@@ -42,13 +44,31 @@ void matr_mul(double *part_matr, double *part_vec, double *dst, int pv_size, int
 	// fix pv_size + 1. it's a bit different for procs (but still should work)
 	double *recv_buff = (double*)malloc((pv_size + 1) * sizeof(double));
 	double *send_buff = (double*)malloc((pv_size + 1) * sizeof(double));
-	memcpy(send_buff, part_vec, pv_size * sizeof(double));
+	memcpy(send_buff, part_vec, received_size * sizeof(double));
 
+	int rank = -1;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Barrier(MPI_COMM_WORLD);
+	printf("rank: %d\n", rank);
+	MPI_Barrier(MPI_COMM_WORLD);
+	printf("full_size: %d\n", full_size);
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (rank == 0) print_part(part_matr, full_size, pv_size);
+	MPI_Barrier(MPI_COMM_WORLD);
 	for (int i = 0; i < proc_amo; i++) {
-		sub_matr_mul(part_matr, send_buff, dst, full_size, received_size, accum_shift);
+		MPI_Barrier(MPI_COMM_WORLD);
+		printf("accum_shift: %d, rank: %d\n", accum_shift, rank);
+		MPI_Barrier(MPI_COMM_WORLD);
+		print_vec(send_buff, received_size, proc_amo, rank, "send_buff");
+		MPI_Barrier(MPI_COMM_WORLD);
+		sub_matr_mul(part_matr, send_buff, dst, pv_size, received_size, full_size, accum_shift, rank);
+		MPI_Barrier(MPI_COMM_WORLD);
+		print_vec(dst, pv_size, proc_amo, rank, "dst");
+		MPI_Barrier(MPI_COMM_WORLD);
 		
-		received_size = rotate(send_buff, recv_buff, received_size, ring, ring_neighbours);
 		accum_shift = (accum_shift + received_size) % full_size;
+		received_size = rotate(send_buff, recv_buff, received_size, ring, ring_neighbours);
+		
 		memcpy(send_buff, recv_buff, received_size * sizeof(double));
 	}
 }
