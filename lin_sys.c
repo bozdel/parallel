@@ -5,8 +5,8 @@
 #include <stdbool.h>
 #include <time.h>
 #include "dbg.h"
-// #include "misc.h"
-#include "misc2.h"
+#include "misc.h"
+// #include "misc2.h"
 
 
 #define FAST
@@ -79,7 +79,7 @@ void init_matrix_v3(double *part, int part_size, int matr_size, int my_shift, in
 	}
 }
 
-/*
+
 // returns cycles amont
 // vec_x - destination vector
 int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *displs, int *recvcounts, int rank) {
@@ -102,6 +102,9 @@ int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int si
 		double AyAy = scalar_mul(Ay, Ay, size);
 		double tou = yAy / AyAy;
 
+		// printf("tou: %f\n", tou);
+		// sleep(1);
+
 		subk(vec_x, tou, vec_y, size, vec_x); // new x = x - ty
 
 		subk(Ax, tou, Ay, size, Ax); // new Ax. A(x - ty) = Ax - tAy
@@ -111,7 +114,7 @@ int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int si
 	return cycle;
 }
 
-// same signature as solve_fast
+/*// same signature as solve_fast
 int solve(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *displs, int *recvcounts, int rank) {
 	int cycle = 0;
 
@@ -139,10 +142,10 @@ int solve(double *part, int part_size, double *vec_b, double *vec_x, int size, d
 	}
 
 	return cycle;
-}
-*/
+}*/
 
-int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *shifts, MPI_Comm ring, int rank, int comm_size, int *neighbours) {
+
+/*int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *shifts, MPI_Comm ring, int rank, int comm_size, int *neighbours) {
 	int cycle = 0;
 
 	double norm2_b = scalar_mul_distr(vec_b, vec_b, size);
@@ -177,8 +180,88 @@ int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int si
 
 	return cycle;
 }
-
+*/
 int main(int argc, char *argv[]) {
+	int Nx = 10;
+	int Ny = 5;
+	if (argc >= 3) {
+		Nx = atoi(argv[1]);
+		Ny = atoi(argv[2]);
+	}
+	int matr_size = Nx * Ny;
+	double precision = 0.01;
+	if (argc >= 4) {
+		precision = atof(argv[3]);
+	}
+
+	int err_code;
+
+	if ((err_code = MPI_Init(&argc, &argv)) != 0) {
+		printf("error\n");
+		return err_code;
+	}
+
+	double *vec_b = (double*)malloc(matr_size * sizeof(double));
+	double *vec_x = (double*)malloc(matr_size * sizeof(double));
+
+	
+
+
+
+
+	int rank, comm_size;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+
+	// print_vec(vec_b, matr_size, comm_size, rank, NULL);
+
+	
+	// ------initing information------
+
+	int part_size = part_size_by_rank(matr_size, comm_size, rank);
+
+	// can be raplaces by displs[rank_number]
+	// index of the first line of part in full matrix
+	int my_shift = shift_by_rank(matr_size, comm_size, rank);
+	
+
+	int *displs = (int*)malloc(comm_size * sizeof(int));
+	for (int proc_rank = 0; proc_rank < comm_size; proc_rank++) {
+		displs[proc_rank] = shift_by_rank(matr_size, comm_size, proc_rank);
+	}
+
+	int *recvcounts = (int*)malloc(comm_size * sizeof(int));
+	for (int proc_rank = 0; proc_rank< comm_size; proc_rank++) {
+		recvcounts[proc_rank] = part_size_by_rank(matr_size, comm_size, proc_rank);
+	}
+
+
+	// ------initing parts------
+	double *part = (double*)malloc(part_size * matr_size * sizeof(double));
+
+	
+	init_matrix_v1(part, part_size, matr_size, my_shift);
+	init_vecs_v1(vec_b, vec_x, matr_size, my_shift);
+
+
+	int cycle = 0; // for checking cycles amount
+
+	clock_t beg = clock();
+
+	cycle = solve_fast(part, part_size, vec_b, vec_x, matr_size, precision, displs, recvcounts, rank);
+
+	clock_t end = clock();
+
+	printf("%f\n", (float)(end - beg) / CLOCKS_PER_SEC);
+	if (rank == 0) {
+		printf("cycles: %d\n", cycle);
+	}
+
+	MPI_Finalize();
+	return 0;
+}
+#if 0
+int main2(int argc, char *argv[]) {
 	int Nx = 10;
 	int Ny = 5;
 	if (argc >= 3) {
@@ -331,3 +414,4 @@ int main(int argc, char *argv[]) {
 	MPI_Finalize();
 	return 0;
 }
+#endif
