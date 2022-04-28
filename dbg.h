@@ -15,4 +15,6 @@ void print_matr(double *part, int matr_size, int part_size, int comm_size, int r
 
 void gen_randvec(double *dst, int size);
 
+void print_vec_0(double *vec, int size, int rank, char const* string);
+
 #endif

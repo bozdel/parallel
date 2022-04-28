@@ -7,15 +7,76 @@
 
 #include "dbg.h"
 
+void init_vecs_v1(double *vec_b, double *vec_x, int size, int full_size) {
+	for (int i = 0; i < size; i++) {
+		vec_b[i] = full_size + 1;
+		vec_x[i] = 0;
+	}
+}
+
+// dots_num - dots where temperature != 0
+void init_vecs_v3(double *vec_b, double *vec_x, int size, int dots_num) {
+	for (int i = 0; i < size; i++) {
+		vec_b[i] = 0;
+		vec_x[i] = 0;
+	}
+	for (int i = 0; i < dots_num; i++) {
+		int ind = rand() % size;
+		vec_b[ind] = rand() % 100 - 50;
+	}
+}
+
+void init_vecs_v3_distr(double *vec_b, double *vec_x, int full_size, int part_size, int dots_num, int shift) {
+	double *tmp_b = (double*)malloc(full_size * sizeof(double));
+	double *tmp_x = (double*)malloc(full_size * sizeof(double));
+	init_vecs_v3(tmp_b, tmp_x, full_size, dots_num);
+	for (int i = 0; i < part_size; i++) {
+		vec_b[i] = tmp_b[i + shift];
+		vec_x[i] = tmp_x[i + shift];
+	}
+	free(tmp_b);
+	free(tmp_x);
+}
+
+void init_matrix_v1(double *part, int part_size, int matr_size, int my_shift) {
+	for (int i = 0; i < part_size; i++) {
+		for (int j = 0; j < matr_size; j++) {
+			part[i * matr_size + j] = 1;
+		}
+		part[i * matr_size + i + my_shift] += 1;
+	}
+}
+
+void init_matrix_v3(double *part, int part_size, int matr_size, int my_shift, int Nx, int Ny) {
+	double **matr = (double**)malloc(part_size * sizeof(double*));
+	for (int i = 0; i < part_size; i++) {
+		matr[i] = part + i * matr_size;
+	}
+	for (int i = 0; i < part_size; i++) {
+		matr[i][i + my_shift] = 4; // row (-4)
+		if ( (i + my_shift + 1 < matr_size) && ((i + 1 + my_shift) % Nx != 0) ) {
+			matr[i][i + my_shift + 1] = 1; // upper shifted (1) row
+		}
+		if ( (i + my_shift - 1 >= 0) && ((i + my_shift) % Nx != 0) ) {
+			matr[i][i + my_shift - 1] = 1; // lower shifted (1) row
+		}
+		if (i + my_shift + Nx < matr_size) {
+			matr[i][i + my_shift + Nx] = 1; // upper2 (1) row
+		}
+		if (i + my_shift - Nx >= 0) {
+			matr[i][i + my_shift - Nx] = 1; // lower2 (1) row
+		}
+	}
+	free(matr);
+}
+
 void sub_matr_mul(double *part_matr, double *part_vec, double *dst, int m_size, int v_size, int full_size, int whence, int rank) {
 	for (int i = 0; i < m_size; i++) {
 		double *line = part_matr + i * full_size + whence;
 		double tmp = 0.0;
 		for (int j = 0; j < v_size; j++) {
-			// if (rank == 0) printf("%f, ", line[j]);
 			tmp += line[j] * part_vec[j];
 		}
-		// if (rank == 0) printf("\n");
 		dst[i] += tmp;
 	}
 }
@@ -46,11 +107,11 @@ void matr_mul(double *part_matr, double *part_vec, double *dst, int pv_size, int
 	double *send_buff = (double*)malloc((pv_size + 1) * sizeof(double));
 	memcpy(send_buff, part_vec, received_size * sizeof(double));
 
+	int rank = -1;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	
 	for (int i = 0; i < proc_amo; i++) {
-		
 		sub_matr_mul(part_matr, send_buff, dst, pv_size, received_size, full_size, accum_shift, rank);
-		
 		
 		accum_shift = (accum_shift + received_size) % full_size;
 		received_size = rotate(send_buff, recv_buff, received_size, ring, ring_neighbours);

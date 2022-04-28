@@ -89,3 +89,15 @@ void gen_randvec(double *dst, int size) {
 		dst[i] = (double)(rand() % 100);
 	}
 }
+
+void print_vec_0(double *vec, int size, int rank, char const* string) {
+	if (rank == 0) {
+		if (string) {
+			printf("%s: ", string);
+		}
+		for (int i = 0; i < size; i++) {
+			printf("%.3f ", vec[i]);
+		}
+		printf("\n");
+	}
+}

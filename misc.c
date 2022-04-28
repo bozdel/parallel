@@ -44,17 +44,6 @@ void subk(double *vec1, double k, double *vec2, int size, double *dst) {
 	}
 }
 
-// something near scalmul_allred(vec1, vec2 + my_shift, part_size)
-double scalar_mul_distr(double *vec1, double *vec2, int size) {
-	double sub_res = 0;
-	for (int i = 0; i < size; i++) {
-		sub_res += vec1[i] * vec2[i];
-	}
-	double res = 0;
-	MPI_Allreduce(&sub_res, &res, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-	return res;
-}
-
 double scalar_mul(double *vec1, double *vec2, int size) {
 	double res = 0.0;
 	for (int i = 0; i < size; i++) {
