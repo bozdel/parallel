@@ -48,8 +48,9 @@ void print_vec(double *vec, int vec_size, int comm_size, int rank, char const* s
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
-void print_distr_vec(double *vec, int size, int comm_size, int rank) {
+void print_distr_vec(double *vec, int size, int comm_size, int rank, char const* string) {
 	MPI_Barrier(MPI_COMM_WORLD);
+	if (rank == 0) printf("%s: ", string);
 	for (int i = 0; i < comm_size; i++) {
 		if (rank == i) {
 			for (int j = 0; j < size; j++) {
@@ -66,7 +67,7 @@ void print_distr_vec(double *vec, int size, int comm_size, int rank) {
 void print_part(double *part, int matr_size, int part_size) {
 	for (int i = 0; i < part_size; i++) {
 		for (int j = 0; j < matr_size; j++) {
-			printf("%.1f ", part[i * matr_size + j]);
+			printf("%.0f ", part[i * matr_size + j]);
 		}
 		printf("\n");
 	}
