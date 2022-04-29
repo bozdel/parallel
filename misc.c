@@ -3,6 +3,56 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+void init_vecs_v1(double *vec_b, double *vec_x, int size, int full_size) {
+	for (int i = 0; i < size; i++) {
+		vec_b[i] = full_size + 1;
+		vec_x[i] = 0;
+	}
+}
+
+// dots_num - dots where temperature != 0
+void init_vecs_v3(double *vec_b, double *vec_x, int size, int dots_num) {
+	for (int i = 0; i < size; i++) {
+		vec_b[i] = 0;
+		vec_x[i] = 0;
+	}
+	for (int i = 0; i < dots_num; i++) {
+		int ind = rand() % size;
+		vec_b[ind] = rand() % 100 - 50;
+	}
+}
+
+void init_matrix_v1(double *part, int part_size, int matr_size, int my_shift) {
+	for (int i = 0; i < part_size; i++) {
+		for (int j = 0; j < matr_size; j++) {
+			part[i * matr_size + j] = 1;
+		}
+		part[i * matr_size + i + my_shift] += 1;
+	}
+}
+
+void init_matrix_v3(double *part, int part_size, int matr_size, int my_shift, int Nx, int Ny) {
+	double **matr = (double**)malloc(part_size * sizeof(double*));
+	for (int i = 0; i < part_size; i++) {
+		matr[i] = part + i * matr_size;
+	}
+	for (int i = 0; i < part_size; i++) {
+		matr[i][i + my_shift] = 4; // row (-4)
+		if ( (i + my_shift + 1 < matr_size) && ((i + 1 + my_shift) % Nx != 0) ) {
+			matr[i][i + my_shift + 1] = 1; // upper shifted (1) row
+		}
+		if ( (i + my_shift - 1 >= 0) && ((i + my_shift) % Nx != 0) ) {
+			matr[i][i + my_shift - 1] = 1; // lower shifted (1) row
+		}
+		if (i + my_shift + Nx < matr_size) {
+			matr[i][i + my_shift + Nx] = 1; // upper2 (1) row
+		}
+		if (i + my_shift - Nx >= 0) {
+			matr[i][i + my_shift - Nx] = 1; // lower2 (1) row
+		}
+	}
+	free(matr);
+}
 
 void part_matr_mul(double *part_matr, int part_size, double *vec, int size, double *dest) {
 	for (int i = 0; i < part_size; i++) {

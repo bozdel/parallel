@@ -3,6 +3,14 @@
 
 #include <stdbool.h>
 
+void init_vecs_v1(double *vec_b, double *vec_x, int size, int full_size);
+
+void init_vecs_v3(double *vec_b, double *vec_x, int size, int dots_num);
+
+void init_matrix_v1(double *part, int part_size, int matr_size, int my_shift);
+
+void init_matrix_v3(double *part, int part_size, int matr_size, int my_shift, int Nx, int Ny);
+
 void part_matr_mul(double *part_matr, int part_size, double *vec, int size, double *dest);
 
 // size - size of matrix and vector (they should be same)

@@ -12,56 +12,6 @@
 
 
 
-
-
-
-void init_matrix_v1(double *part, int part_size, int matr_size, int my_shift) {
-	for (int i = 0; i < part_size; i++) {
-		for (int j = 0; j < matr_size; j++) {
-			part[i * matr_size + j] = 1;
-		}
-		part[i * matr_size + i + my_shift] += 1;
-	}
-}
-
-void init_matrix_v3(double *part, int part_size, int matr_size, int my_shift, int Nx, int Ny) {
-	for (int i = 0; i < part_size; i++) {
-		for (int j = 0; j < matr_size; j++) {
-			part[i * matr_size + j] = 0;
-		}
-		part[i * matr_size + i + my_shift] = -4; // row (-4)
-	}
-	for (int i = 0; i < part_size; i++) { // upper (1) row
-		if (i * matr_size + i + 1 + my_shift < matr_size * matr_size) {
-			part[i * matr_size + i + 1 + my_shift] = 1;
-		}
-	}
-	for (int i = 0; i < part_size; i++) { // lower (1) row
-		if (i * matr_size + i - 1 + my_shift > 0) {
-			part[i * matr_size + i - 1 + my_shift] = 1;
-		}
-	}
-	for (int i = 0; i < part_size; i++) { // upper zero shifted row
-		if (i * matr_size + i + 1 + my_shift < matr_size * matr_size && (i + my_shift + 1) % Nx == 0) {
-			part[i * matr_size + i + 1 + my_shift] = 0;
-		}
-	}
-	for (int i = 0; i < part_size; i++) { // lower (1) row
-		if (i * matr_size + i - 1 + my_shift > 0 && (i + my_shift) % Nx == 0) {
-			part[i * matr_size + i - 1 + my_shift] = 0;
-		}
-	}
-	for (int i = 0; i < part_size; i++) {
-		if (i * matr_size + i + Nx + my_shift < matr_size * matr_size && (i + Nx + my_shift) < matr_size) {
-			part[i * matr_size + i + Nx + my_shift] = 1;
-		}
-		if (i * matr_size + i - Nx + my_shift >= 0 && (i - Nx + my_shift) >= 0) {
-			part[i * matr_size + i - Nx + my_shift] = 1;
-		}
-	}
-}
-
-
 // returns cycles amont
 // vec_x - destination vector
 int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int size, double precision, int *displs, int *recvcounts, int rank) {
@@ -126,6 +76,7 @@ int solve(double *part, int part_size, double *vec_b, double *vec_x, int size, d
 	return cycle;
 }
 
+
 int main(int argc, char *argv[]) {
 	int Nx = 10;
 	int Ny = 5;
@@ -138,6 +89,10 @@ int main(int argc, char *argv[]) {
 	if (argc >= 4) {
 		precision = atof(argv[3]);
 	}
+	int dots_num = 6; // dots where temperature != 0
+	if (argc >= 5) {
+		dots_num = atoi(argv[4]);
+	}
 
 	int err_code;
 
@@ -146,33 +101,10 @@ int main(int argc, char *argv[]) {
 		return err_code;
 	}
 
-	double *vec_b = (double*)malloc(matr_size * sizeof(double));
-	double *vec_x = (double*)malloc(matr_size * sizeof(double));
-
-	for (int i = 0; i < matr_size; i++) {
-		vec_x[i] = 0;
-		vec_b[i] = 0;
-	}
-	// 1-st variant
-	/*for (int i = 0; i < matr_size; i++) {
-		vec_b[i] = matr_size + 1;
-		vec_x[i] = 0;
-	}*/
-	// 3-rd variant
-	int dots_num = 6; // dots where temperature != 0
-	for (int i = 0; i < dots_num; i++) {
-		int ind = rand() % matr_size;
-		vec_b[ind] = rand() % 100 - 50;
-	}
-
-
-
 
 	int rank, comm_size;
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
-
-	// print_vec(vec_b, matr_size, comm_size, rank, NULL);
 
 	
 	// ------initing information------
@@ -196,18 +128,17 @@ int main(int argc, char *argv[]) {
 
 
 	// ------initing parts------
-	double *part = (double*)malloc(part_size * matr_size * sizeof(double));
-
-	// 1-st variant
 	
+	double *part = (double*)malloc(part_size * matr_size * sizeof(double));
+	double *vec_b = (double*)malloc(matr_size * sizeof(double));
+	double *vec_x = (double*)malloc(matr_size * sizeof(double));
+	
+	// init_vecs_v1(vec_b, vec_x, matr_size, matr_size);
+	init_vecs_v3(vec_b, vec_x, matr_size, dots_num);
+
 	// init_matrix_v1(part, part_size, matr_size, my_shift);
-
-	// 3-rd variant
-
 	init_matrix_v3(part, part_size, matr_size, my_shift, Nx, Ny);
 
-
-	// print_matr(part, matr_size, part_size, comm_size, rank);
 
 
 	int cycle = 0; // for checking cycles amount
@@ -227,68 +158,9 @@ int main(int argc, char *argv[]) {
 		printf("cycles: %d\n", cycle);
 	}
 
-	// MPI_Barrier(MPI_COMM_WORLD);
-	// print_vec(vec_x, matr_size, comm_size, rank, "x");
+	// print_vec_0(vec_x, matr_size, rank, "x");
+
 
 	MPI_Finalize();
 	return 0;
 }
-
-#if 0
-#include <stdio.h>
-#include <stdlib.h>
-#include <mpi.h>
- 
-/**
- * @brief Illustrates how to use an allgather.
- * @details This application is meant to be run with 3 MPI processes. Every MPI
- * process begins with a value, then every MPI process collects the entirety of
- * the data gathered and prints them. It can be visualised as follows:
- *
- * +-----------+  +-----------+  +-----------+
- * | Process 0 |  | Process 1 |  | Process 2 |
- * +-+-------+-+  +-+-------+-+  +-+-------+-+
- *   | Value |      | Value |      | Value |
- *   |   0   |      |  100  |      |  200  |
- *   +-------+      +-------+      +-------+
- *       |________      |      ________|
- *                |     |     | 
- *             +-----+-----+-----+
- *             |  0  | 100 | 200 |
- *             +-----+-----+-----+
- *             |   Each process  |
- *             +-----------------+
- **/
-int main(int argc, char* argv[])
-{
-    MPI_Init(&argc, &argv);
- 
-    // Get number of processes and check that 3 processes are used
-    int size;
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    if(size != 3)
-    {
-        printf("This application is meant to be run with 3 MPI processes.\n");
-        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
-    }
- 
-    // Get my rank
-    int my_rank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
- 
-    // Define my value
-    // int my_value = my_rank * 100;
-    // printf("Process %d, my value = %d.\n", my_rank, my_value);
-    int my_arr[3] = { 0 };
-    my_arr[my_rank] = my_rank;
-    printf("Process %d: %d %d %d\n", my_rank, my_arr[0], my_arr[1], my_arr[2]);
- 
-    int buffer[3];
-    MPI_Allgather(my_arr + my_rank, 1, MPI_INT, my_arr, 1, MPI_INT, MPI_COMM_WORLD);
-    printf("Values collected on process %d: %d, %d, %d.\n", my_rank, buffer[0], buffer[1], buffer[2]);
- 
-    MPI_Finalize();
- 
-    return EXIT_SUCCESS;
-}
-#endif
