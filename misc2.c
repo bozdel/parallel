@@ -94,7 +94,7 @@ int rotate(double *send, double *recv, int send_size, MPI_Comm ring, int *ring_n
 
 
 // proc_amo - ring_comm size
-void matr_mul(double *part_matr, double *part_vec, double *dst, int pv_size, int full_size, int init_shift, MPI_Comm ring, int proc_amo, int *ring_neighbours) {
+void matr_mul(double *part_matr, double *part_vec, double *dst, int pv_size, int full_size, int init_shift, MPI_Comm ring, int proc_amo, int *ring_neighbours, double *recv_buff, double *send_buff) {
 	int accum_shift = init_shift;
 	for (int i = 0; i < pv_size; i++) {
 		dst[i] = 0.0;
@@ -102,9 +102,7 @@ void matr_mul(double *part_matr, double *part_vec, double *dst, int pv_size, int
 
 	// initing data for first cycle
 	int received_size = pv_size;
-	// fix pv_size + 1. it's a bit different for procs (but still should work)
-	double *recv_buff = (double*)malloc((pv_size + 1) * sizeof(double));
-	double *send_buff = (double*)malloc((pv_size + 1) * sizeof(double));
+
 	memcpy(send_buff, part_vec, received_size * sizeof(double));
 
 	int rank = -1;

@@ -18,10 +18,13 @@ int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int si
 	double *vec_y = (double*)malloc(part_size * sizeof(double));
 	double *Ay = (double*)malloc(part_size * sizeof(double));
 
-	matr_mul(part, vec_x, Ax, part_size, size, shifts[rank], ring, comm_size, neighbours); // Ax
+	double *tmp1 = (double*)malloc((part_size + 1) * sizeof(double)); // receive buffer
+	double *tmp2 = (double*)malloc((part_size + 1) * sizeof(double)); // send buffer
+
+	matr_mul(part, vec_x, Ax, part_size, size, shifts[rank], ring, comm_size, neighbours, tmp1, tmp2); // Ax
 	sub(Ax, vec_b, part_size, vec_y); // y = Ax - b
 	for (cycle = 0 ; !check_distr(vec_y, norm2_b, part_size, precision); cycle++) { // check - (||Ax-b||/||b||)^2 < precision^2
-		matr_mul(part, vec_y, Ay, part_size, size, shifts[rank], ring, comm_size, neighbours); // Ay
+		matr_mul(part, vec_y, Ay, part_size, size, shifts[rank], ring, comm_size, neighbours, tmp1, tmp2); // Ay
 
 		double yAy = scalar_mul_distr(vec_y, Ay, part_size);
 		double AyAy = scalar_mul_distr(Ay, Ay, part_size);
@@ -35,6 +38,9 @@ int solve_fast(double *part, int part_size, double *vec_b, double *vec_x, int si
 	free(Ax);
 	free(vec_y);
 	free(Ay);
+
+	free(tmp1);
+	free(tmp2);
 
 	return cycle;
 }
@@ -93,8 +99,8 @@ int main(int argc, char *argv[]) {
 	double *vec_b = (double*)malloc(part_size * sizeof(double));
 	double *vec_x = (double*)malloc(part_size * sizeof(double));
 
-	// init_matrix_v3(part, part_size, matr_size, shift, Nx, Ny);
-	init_matrix_v1(part, part_size, matr_size, shift);
+	init_matrix_v3(part, part_size, matr_size, shift, Nx, Ny);
+	// init_matrix_v1(part, part_size, matr_size, shift);
 
 	init_vecs_v3_distr(vec_b, vec_x, matr_size, part_size, dots_num, shift);
 
@@ -106,7 +112,7 @@ int main(int argc, char *argv[]) {
 	if (rank == 0) printf("cycles: %d\n", cycle);
 	printf("rank %d, time: %f\n", rank, (float)(end - beg) / CLOCKS_PER_SEC);
 
-	print_distr_vec(vec_x, part_size, comm_size, rank, "x");
+	// print_distr_vec(vec_x, part_size, comm_size, rank, "x");
 
 
 	MPI_Finalize();
