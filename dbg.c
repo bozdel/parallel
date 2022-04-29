@@ -28,6 +28,18 @@ void print_vecint(int *vec, int vec_size, int comm_size, int rank) {
 	}	
 }
 
+void print_vec_0(double *vec, int size, int rank, char const* string) {
+	if (rank == 0) {
+		if (string) {
+			printf("%s: ", string);
+		}
+		for (int i = 0; i < size; i++) {
+			printf("%f ", vec[i]);
+		}
+		printf("\n");
+	}
+}
+
 void print_vec(double *vec, int vec_size, int comm_size, int rank, char const* string) {
 	MPI_Barrier(MPI_COMM_WORLD);
 	for (int i = 0; i < comm_size; i++) {

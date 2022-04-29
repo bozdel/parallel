@@ -158,7 +158,7 @@ int main(int argc, char *argv[]) {
 		printf("cycles: %d\n", cycle);
 	}
 
-	// print_vec_0(vec_x, matr_size, rank, "x");
+	print_vec_0(vec_x, matr_size, rank, "x");
 
 
 	MPI_Finalize();
